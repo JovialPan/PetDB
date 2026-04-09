@@ -49,7 +49,8 @@ CREATE TABLE Food (
     Flavor NVARCHAR(50),
     Function NVARCHAR(100),  
     AgeGroup NVARCHAR(50),   
-    BodyType NVARCHAR(50),  
+    BodyType NVARCHAR(50),
+    PetType NVARCHAR(50),  
 	AACFO BIT,
 	ThirdPartyTest BIT,
     Calories FLOAT
