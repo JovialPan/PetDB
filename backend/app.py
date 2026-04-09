@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 conn = pyodbc.connect(
     "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=140.125.193.36;"
+    "SERVER=localhost\\SQLEXPRESS;"
     "DATABASE=PetDB;"
     "UID=UserAdmin2;"
     "PWD=groupH115"
@@ -78,7 +78,7 @@ def login():
 
 
 #新增寵物
-@app.route('/add_pet', methods=['POST'])
+@app.route('/add', methods=['POST'])
 def add_pet():
     data = request.get_json(silent=True) or request.form
 
