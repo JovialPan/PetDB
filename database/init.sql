@@ -1,3 +1,5 @@
+CREATE DATABASE PetDB;
+
 USE PetDB; 
 
 CREATE TABLE Users ( 
@@ -5,6 +7,19 @@ CREATE TABLE Users (
     Email NVARCHAR(100) NOT NULL UNIQUE,
     Password NVARCHAR(255) NOT NULL, 
     UserName NVARCHAR(50),  
+);
+
+CREATE TABLE Food (
+	FoodID INT PRIMARY KEY IDENTITY(1,1),
+    Brand NVARCHAR(50),
+    Flavor NVARCHAR(50),
+    UseFor NVARCHAR(100),  
+    AgeGroup NVARCHAR(50),   
+    BodyType NVARCHAR(50), 
+    PetType NVARCHAR(20),
+	AACFO BIT,
+	ThirdPartyTest BIT,
+    Calories FLOAT
 );
 
 CREATE TABLE Pets (
@@ -16,9 +31,9 @@ CREATE TABLE Pets (
     Birthday DATE,                     
     Weight DECIMAL(5,2),     
 	FoodID INT,
-	Activity NVARCHAR(20)
+	Activity NVARCHAR(20),
 	BodyType NVARCHAR(50),  
-    IsSterilized BIT DEFAULT 0,                -- 是否結紮 (0:否, 1:是)
+    IsSterilized BIT DEFAULT 0, -- 是否結紮 (0:否, 1:是)
     FOREIGN KEY (UserID) REFERENCES Users(UserID) ON DELETE CASCADE,
 	FOREIGN KEY (FoodID) REFERENCES Food(FoodID)
 );
@@ -43,21 +58,29 @@ CREATE TABLE Medical (
     FOREIGN KEY (PetID) REFERENCES Pets(PetID)
 );
 
-CREATE TABLE Food (
-	FoodID INT PRIMARY KEY IDENTITY(1,1),
-    Brand NVARCHAR(50),
-    Flavor NVARCHAR(50),
-    Function NVARCHAR(100),  
-    AgeGroup NVARCHAR(50),   
-    BodyType NVARCHAR(50),  
-	AACFO BIT,
-	ThirdPartyTest BIT,
-    Calories FLOAT
-);
-
 CREATE TABLE Snacks (
 	SnackID INT PRIMARY KEY IDENTITY(1,1),
     Name NVARCHAR(50),
     Calories INT,
-    Gram FLOAT,
+    Gram FLOAT
+);
+
+CREATE TABLE DailyFood (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    calories INT, 
+    record_date DATE DEFAULT GETDATE()
+);
+
+CREATE TABLE DailyWater (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    water_ml INT,  
+    record_date DATE DEFAULT GETDATE()
+);
+
+CREATE TABLE Chart (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    food_id INT,
+    water_id INT,      
+    FOREIGN KEY (food_id) REFERENCES DailyFood(id),
+    FOREIGN KEY (water_id) REFERENCES DailyWater(id)
 );
