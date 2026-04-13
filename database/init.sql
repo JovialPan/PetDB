@@ -61,12 +61,3 @@ CREATE TABLE Snacks (
     Calories INT,
     Gram FLOAT,
 );
-
-CREATE TABLE HealthLogs (
-	HealthLogID INT PRIMARY KEY IDENTITY(1,1),
-    PetID INT NOT NULL, 
-    Weight DECIMAL(5,2),
-    Temperature DECIMAL(5,2),   
-    RecordTime DATETIME2 DEFAULT SYSDATETIME(),
-    FOREIGN KEY (PetID) REFERENCES Pets(PetID)
-);
