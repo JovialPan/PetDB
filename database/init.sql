@@ -17,7 +17,7 @@ CREATE TABLE Food (
     AgeGroup NVARCHAR(50),   
     BodyType NVARCHAR(50), 
     PetType NVARCHAR(20),
-	AACFO BIT,
+	AAFCO BIT,
 	ThirdPartyTest BIT,
     Calories FLOAT
 );
@@ -58,6 +58,7 @@ CREATE TABLE Medical (
     FOREIGN KEY (PetID) REFERENCES Pets(PetID)
 );
 
+
 CREATE TABLE Snacks (
 	SnackID INT PRIMARY KEY IDENTITY(1,1),
     Name NVARCHAR(50),
@@ -69,12 +70,14 @@ CREATE TABLE DailyFood (
     id INT PRIMARY KEY IDENTITY(1,1),
     calories INT, 
     record_date DATE DEFAULT GETDATE()
+    FOREIGN KEY (pet_id) REFERENCES Pets(PetID)
 );
 
 CREATE TABLE DailyWater (
     id INT PRIMARY KEY IDENTITY(1,1),
     water_ml INT,  
     record_date DATE DEFAULT GETDATE()
+    FOREIGN KEY (pet_id) REFERENCES Pets(PetID)
 );
 
 CREATE TABLE Chart (
