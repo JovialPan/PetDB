@@ -1,164 +1,82 @@
-from flask import Flask, jsonify
-from flask import request
 import pyodbc
 
-app = Flask(__name__)
+def get_connection():
+    return pyodbc.connect(
+        "DRIVER={ODBC Driver 17 for SQL Server};"
+        "SERVER=localhost;"
+        "DATABASE=petdb;"
+        "UID=sa;"
+        "PWD=1234;"
+        "TrustServerCertificate=yes;"
+    )
 
-conn = pyodbc.connect(
-    "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=localhost\\SQLEXPRESS;"
-    "DATABASE=PetDB;"
-    "UID=UserAdmin2;"
-    "PWD=groupH115"
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from database import get_connection
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"message": "API running with SQL Server"}
 
-#註冊 
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json(silent=True) or request.form
-        
-    username = data.get("username")
-    password = data.get("password")
-    email = data.get("email")
+@app.get("/feeds")
+def get_feeds():
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, feed_name, brand, calories FROM feeds")
+        rows = cursor.fetchall()
 
-    if not username or not password or not email:
-        return jsonify({
-            "status": "fail",
-            "message": f"缺少欄位 username={username}, password={password}, email={email}"
-        })
+        return [
+            {
+                "id": row.id,
+                "feed_name": row.feed_name,
+                "brand": row.brand,
+                "calories": row.calories
+            }
+            for row in rows
+        ]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
 
-    cursor = conn.cursor()
+@app.get("/feeds/{feed_id}")
+def get_feed(feed_id: int):
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, feed_name, brand, calories FROM feeds WHERE id = ?",
+            (feed_id,)
+        )
+        row = cursor.fetchone()
 
-    cursor.execute(
-        "SELECT * FROM Users WHERE email=? OR username=?",
-        (email, username)
-    )
-    if cursor.fetchone():
-        return jsonify({"status": "fail", "message": "帳號或Email已存在"})
+        if row is None:
+            raise HTTPException(status_code=404, detail="Feed not found")
 
-    cursor.execute(
-        "INSERT INTO Users (email, username, password) VALUES (?, ?, ?)",
-        (email, username, password)
-    )
-    conn.commit()
-
-    return jsonify({"status": "success"})
-
-# 登入 
-@app.route('/login', methods=['POST'])
-def login():
-    data = request.get_json(silent=True) or request.form
-
-    email = data.get("email")
-    password = data.get("password")
-
-    if not email or not password:
-        return jsonify({
-            "status": "fail",
-            "message": "帳號或密碼不能為空"
-        })
-
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT UserID FROM Users WHERE Email=? AND Password=?",
-        (email, password)
-    )
-
-    user = cursor.fetchone()
-    
-    if user:
-        return jsonify({
-            "status": "success",
-            "user_id": user[0]
-        })
-    else:
-        return jsonify({"status": "fail"})
-
-
-#新增寵物
-@app.route('/add', methods=['POST'])
-def add_pet():
-    data = request.get_json(silent=True) or request.form
-
-    user_id = data.get("UserID")
-    pet_name = data.get("PetName")
-    gender = data.get("Gender")
-    species = data.get("Species")
-    birthday = data.get("Birthday")  # YYYY-MM-DD
-    weight = data.get("Weight")
-    food_id = data.get("FoodID")
-    activity = data.get("Activity")
-    body_type = data.get("BodyType")
-    is_sterilized = data.get("IsSterilized")
-
-    if not user_id or not pet_name:
-        return jsonify({"status": "fail", "message": "user_id 或 pet_name 缺失"})
-
-    cursor = conn.cursor()
-
-    cursor.execute("""
-        INSERT INTO Pets 
-        (UserID, PetName, Gender, Species, Birthday, Weight, FoodID, Activity, BodyType, IsSterilized)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        user_id,
-        pet_name,
-        gender,
-        species,
-        birthday,
-        weight,
-        food_id,
-        activity,
-        body_type,
-        is_sterilized
-    ))
-
-    conn.commit()
-
-    return jsonify({"status": "success", "message": "新增寵物成功"})
-
-#選單取得飼料資料
-# @app.route('/get_foods', methods=['GET'])
-# def get_foods():
-    
-#     cursor = conn.cursor()
-#     cursor.execute("SELECT Flavor FROM Food")
-
-#     foods = []
-#     for row in cursor.fetchall():
-#         foods.append({
-#             "Flavor": row[0]
-#         })
-
-#     return jsonify({"status": "success", "foods": foods})
-
-# 取得寵物列表
-# @app.route('/get_pets', methods=['POST'])
-# def get_pets():
-#     data = request.json
-#     user_id = data.get("user_id")
-
-#     cursor = conn.cursor()
-#     cursor.execute(
-#         "SELECT id, pet_name, type, age FROM Pets WHERE user_id=?",
-#         (user_id,)
-#     )
-
-#     pets = []
-#     for row in cursor.fetchall():
-#         pets.append({
-#             "id": row[0],
-#             "pet_name": row[1],
-#             "type": row[2],
-#             "age": row[3]
-#         })
-
-#     return jsonify({"status": "success", "pets": pets})
-
-
-
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+        return {
+            "id": row.id,
+            "feed_name": row.feed_name,
+            "brand": row.brand,
+            "calories": row.calories
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if conn:
+            conn.close()
