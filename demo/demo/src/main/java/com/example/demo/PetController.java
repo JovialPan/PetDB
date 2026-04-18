@@ -163,7 +163,7 @@ public class PetController {
         @RequestParam String petType,   // 寵物種類 (貓/狗)
         @RequestParam String keyword    // 使用者在 AI 幫手點選或輸入的關鍵字
     ) {
-        
+        da
         String sql = "SELECT FoodID, Brand, Flavor, UseFor, AgeGroup, BodyType, Calories " +
                     "FROM Food " +
                     "WHERE (PetType = ? OR PetType = '全種') " + // 確保物種正確
