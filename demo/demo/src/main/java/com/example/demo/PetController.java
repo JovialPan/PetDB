@@ -363,15 +363,41 @@ public class PetController {
     }
 
 
-    //圖表
-    @GetMapping("/get_chart_data/{petId}")
-    public List<Map<String, Object>> getChartData(@PathVariable int petId) {
-        // 這裡根據你的 HealthLogs 或攝取紀錄表抓取最近一個月的體重或進食趨勢
-        String sql = "SELECT CAST(RecordTime AS DATE) as Date, Weight FROM HealthLogs " +
-                    "WHERE PetID = ? AND RecordTime >= DATEADD(day, -30, GETDATE()) " +
-                    "ORDER BY RecordTime ASC";
+    //飲食圖表  
+    @GetMapping("/get_week_food/{petId}")
+    public List<Map<String, Object>> getWeekFood(@PathVariable int petId) {
+
+        String sql = """
+            SELECT 
+                CAST(RecordDate AS DATE) as Date,
+                SUM(Calories) as total_calories
+            FROM DailyFood
+            WHERE PetId = ?
+            AND RecordDate >= DATEADD(day, -7, GETDATE())
+            GROUP BY CAST(RecordDate AS DATE)
+            ORDER BY Date ASC
+        """;
+
         return jdbcTemplate.queryForList(sql, petId);
-    }   
+    }
+    //飲水圖表
+    @GetMapping("/get_week_water/{petId}")
+    public List<Map<String, Object>> getWeekWater(@PathVariable int petId) {
+
+        String sql = """
+            SELECT 
+                CAST(RecordDate AS DATE) as Date,
+                SUM(WaterML) as total_water
+            FROM DailyWater
+            WHERE PetId = ?
+            AND RecordDate >= DATEADD(day, -7, GETDATE())
+            GROUP BY CAST(RecordDate AS DATE)
+            ORDER BY Date ASC
+        """;
+
+        return jdbcTemplate.queryForList(sql, petId);
+    }
+
 
     @PostMapping("/api/assistant")
         public Map<String, String> externalAiAssistant(@RequestBody Map<String, String> request) {
