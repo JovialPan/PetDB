@@ -88,12 +88,13 @@ CREATE TABLE DailySummary (
     FOREIGN KEY (water_id) REFERENCES DailyWater(id)
 );
 
--- 建立行事曆事件表
+
 CREATE TABLE Events (
     EventID INT PRIMARY KEY IDENTITY(1,1),
     UserID INT,
-    EventDate DATE,      -- 存放影片中選擇的日期
-    EventTime NVARCHAR(10), -- 存放影片中選擇的時間
-    Title NVARCHAR(255), -- 存放影片中輸入的計事內容
-    FOREIGN KEY (UserID) REFERENCES Users(UserID)
-);
+    PetID INT,            
+    EventDate DATE,       
+    EventTime NVARCHAR(10), 
+    Title NVARCHAR(255), 
+    FOREIGN KEY (UserID) REFERENCES Users(UserID),
+    FOREIGN KEY (PetID) REFERENCES Pets(PetID) 
