@@ -80,10 +80,21 @@ CREATE TABLE DailyWater (
     FOREIGN KEY (pet_id) REFERENCES Pets(PetID)
 );
 
-CREATE TABLE Chart (
+CREATE TABLE DailySummary (
     id INT PRIMARY KEY IDENTITY(1,1),
     food_id INT,
     water_id INT,      
     FOREIGN KEY (food_id) REFERENCES DailyFood(id),
     FOREIGN KEY (water_id) REFERENCES DailyWater(id)
 );
+
+
+CREATE TABLE Events (
+    EventID INT PRIMARY KEY IDENTITY(1,1),
+    UserID INT,
+    PetID INT,            
+    EventDate DATE,       
+    EventTime NVARCHAR(10), 
+    Title NVARCHAR(255), 
+    FOREIGN KEY (UserID) REFERENCES Users(UserID),
+    FOREIGN KEY (PetID) REFERENCES Pets(PetID) 

@@ -1,12 +1,32 @@
 package com.example.demo;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.bind.annotation.*;
-import java.util.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+@CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/") 
+@SuppressWarnings("all") 
 public class PetController {
 
     @Autowired
@@ -50,12 +70,12 @@ public class PetController {
     }
 
     //更新密碼
-    //@PostMapping("/update_password") 
-    //public Map<String, Object> updatePassword(@RequestBody UserRequest data) {
-        //String sql = "UPDATE Users SET Password = ? WHERE Email = ?";
-       // int rows = jdbcTemplate.update(sql, data.password, data.email);
-        //return rows > 0 ? Map.of("status", "success") : Map.of("status", "fail", "message", "找不到該 Email");
-   // }
+    @PostMapping("/update_password") 
+    public Map<String, Object> updatePassword(@RequestBody UserRequest data) {
+        String sql = "UPDATE Users SET Password = ? WHERE Email = ?";
+        int rows = jdbcTemplate.update(sql, data.password, data.email);
+        return rows > 0 ? Map.of("status", "success") : Map.of("status", "fail", "message", "找不到該 Email");
+    }
 
     // 3. 新增寵物 (加入計算邏輯)
     @PostMapping("/add")
@@ -93,8 +113,8 @@ public class PetController {
         }
 
         // 5. 執行 SQL 插入 
-        String sql = "INSERT INTO Pets (UserID, PetName, Gender, Species, Birthday, Weight, FoodID, Activity, BodyType, IsSterilized) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT INTO Pets (UserID, PetName, Species, Birthday, Gender, IsSterilized, Weight) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?)";
         
         jdbcTemplate.update(sql, 
             data.UserID, data.PetName, data.Gender, data.Species, 
@@ -122,67 +142,150 @@ public class PetController {
         return res;
     }
 
-    @PostMapping("/recommend_foods") //推薦飼料
+   
+    @PostMapping("/recommend_foods")
     public List<Map<String, Object>> recommendFoods(@RequestBody PetRequest pet) {
-        // 1. 基礎 SQL 語法，把欄位改成你資料庫真正的名稱
-        StringBuilder sql = new StringBuilder(
-            "SELECT FoodID, Brand, Flavor, UseFor, AgeGroup, BodyType, Calories " +
-            "FROM Food WHERE 1=1 "
-        );
-        List<Object> params = new ArrayList<>();
+        // 確保 pet 不是 null 避免警告
+        if (pet == null) return new java.util.ArrayList<>();
 
-        // 2. 邏輯 A：物種過濾 (對應 Excel 裡的 PetType 欄位)
+        StringBuilder sql = new StringBuilder("SELECT * FROM Food WHERE 1=1 ");
+        List<Object> params = new java.util.ArrayList<>();
+
+        // 這裡使用 pet.getSpecies() 或 pet.Species 視你的 PetRequest 定義而定
+        // 假設你的 PetRequest 變數是大寫開頭且為 public
         if (pet.Species != null) {
-            sql.append(" AND (PetType = ? OR PetType = '全種') ");
+            sql.append(" AND (PetType = ? OR PetType = '全適用') ");
             params.add(pet.Species);
         }
 
-        // 3. 邏輯 B：年齡層推薦 (對應 AgeGroup 欄位)
         if (pet.Birthday != null) {
-            // 這裡可以根據前端傳來的生日判斷，或者前端直接傳 AgeGroup 過來
-            // 範例：如果前端傳來的是 '幼年'
-            sql.append(" AND AgeGroup = ? ");
-            params.add("成年"); // 這邊之後可以寫動態判斷邏輯
+            sql.append(" AND (AgeGroup LIKE ? OR AgeGroup = '全年齡') ");
+            params.add("%成年%"); 
         }
 
-        // 4. 邏輯 C：AI 症狀篩選 (對應你剛確認的 UseFor 欄位)
-        // 假設前端透過 AI 幫手介面傳送了關鍵字需求
-        if (pet.Activity != null) { // 這裡暫用 Activity 欄位模擬前端傳來的需求字串
+        if (pet.Activity != null) { 
             sql.append(" AND (UseFor LIKE ? OR Flavor LIKE ?) ");
             String keyword = "%" + pet.Activity + "%";
             params.add(keyword);
             params.add(keyword);
         }
 
+        // 將 StringBuilder 轉為 String，並將 List 轉為 Object 陣列
         return jdbcTemplate.queryForList(sql.toString(), params.toArray());
     }
 
+    @GetMapping("/ai_recommend")
+    public Map<String, Object> aiRecommend(@RequestParam String userInput) {
+        // 1. 取得 AI 解析標籤
+        Map<String, String> aiTags = callGeminiToExtractTags(userInput);
+        
+        String species = aiTags.getOrDefault("species", "狗"); 
+        String age = aiTags.getOrDefault("age", "全年齡");
+        String useFor = aiTags.getOrDefault("useFor", "一般");
+        String bodyType = aiTags.getOrDefault("bodyType", "全適用");
 
-    @GetMapping("/ai_recommend") //AI幫手
-    public List<Map<String, Object>> aiRecommend(
-        @RequestParam String petType,   // 寵物種類 (貓/狗)
-        @RequestParam String keyword    // 使用者在 AI 幫手點選或輸入的關鍵字
-    ) {
-        da
-        String sql = "SELECT FoodID, Brand, Flavor, UseFor, AgeGroup, BodyType, Calories " +
-                    "FROM Food " +
-                    "WHERE (PetType = ? OR PetType = '全種') " + // 確保物種正確
-                    "AND (UseFor LIKE ? OR Flavor LIKE ? OR Brand LIKE ?)"; // 多重關鍵字比對
+        // 2. 構建「基礎」SQL (WHERE 1=1 是動態拼接的神技)
+        StringBuilder sql = new StringBuilder("SELECT * FROM Food WHERE (PetType = ? OR PetType = '全適用') ");
+        List<Object> params = new ArrayList<>();
+        params.add(species);
+
+        // 3. 動態添加：體態 (BodyType)
+        sql.append(" AND (BodyType = ? OR BodyType = '全適用') ");
+        params.add(bodyType);
+
+        // 4. 動態添加：年齡層 (只有非「全年齡」才過濾，讓成犬也能被全年齡搜到)
+        if (!age.equals("全年齡")) {
+            sql.append(" AND (AgeGroup LIKE ? OR AgeGroup = '全年齡') ");
+            params.add("%" + age + "%");
+        }
+
+        // 5. 動態添加：需求 (UseFor)
+        if (!useFor.equals("一般")) {
+            sql.append(" AND UseFor LIKE ?");
+            params.add("%" + useFor + "%");
+        }
+
+        // 6. 執行查詢
+        List<Map<String, Object>> foods = jdbcTemplate.queryForList(sql.toString(), params.toArray());
+
+        // 7. 回傳結果
+        Map<String, Object> response = new HashMap<>();
+        response.put("recommended_foods", foods);
+        response.put("ai_analysis", "AI 分析 - 種類：" + species + "，年齡：" + age + 
+                                    "，體態：" + bodyType + "，需求：" + useFor);
         
-        // 模糊搜尋設定
-        String queryKeyword = "%" + keyword + "%";
-        
-        // 執行查詢並回傳結果清單
-        return jdbcTemplate.queryForList(sql, petType, queryKeyword, queryKeyword, queryKeyword);
+        return response;
     }
 
-    // 4. 取得寵物清單 (給前端顯示)
-    @GetMapping("/get_pets/{userId}")
-    public List<Map<String, Object>> getPets(@PathVariable int userId) {
-        String sql = "SELECT * FROM Pets WHERE UserID = ?";
-        return jdbcTemplate.queryForList(sql, userId);
+    @SuppressWarnings("unchecked")
+    private Map<String, String> callGeminiToExtractTags(String input) {
+        String apiKey = "AIzaSyCuFEs8bg3sFmtUvNXQHwkpvao-TS0fYiQ"; 
+        try {
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/google/gemini-1.5-flash:generateContent?key=" + apiKey;
+            
+            // 強化 Prompt：加入 bodyType 判斷
+            String prompt = "使用者說：'" + input + "'。分析需求並回傳 JSON。規則：\n" +
+                            "1. species: '貓' 或 '狗'。\n" +
+                            "2. age: '幼貓'、'幼犬'、'全年齡'、'熟齡' 或 '高齡'。\n" +
+                            "3. useFor: 挑食、體重管理等 Excel 標籤，沒提到回傳 '一般'。\n" +
+                            "4. bodyType: 提到'胖'且是狗回傳 '胖犬'；是貓回傳 '胖貓'。否則回傳 '全適用'。\n" +
+                            "回傳純 JSON 範例：{\"species\":\"狗\",\"age\":\"全年齡\",\"useFor\":\"一般\",\"bodyType\":\"胖犬\"}";
+
+            String payload = "{\"contents\": [{\"parts\":[{\"text\": \"" + prompt.replace("\"", "\\\"").replace("\n", "\\n") + "\"}]}]}";
+
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .build();
+
+            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+            String body = response.body();
+            System.out.println("Gemini Raw Response: " + body);
+
+            if (body != null && body.contains("candidates")) {
+                JsonObject jsonResponse = JsonParser.parseString(body).getAsJsonObject();
+                String aiText = jsonResponse.getAsJsonArray("candidates").get(0).getAsJsonObject()
+                                .getAsJsonObject("content").getAsJsonArray("parts").get(0).getAsJsonObject()
+                                .get("text").getAsString().replace("```json", "").replace("```", "").trim();
+                return new Gson().fromJson(aiText, Map.class);
+            } else {
+                throw new Exception("API Error");
+            }
+        } catch (Exception e) {
+            // --- 萬能防呆 Catch 區塊 ---
+            Map<String, String> fallback = new HashMap<>();
+            String species = (input.contains("貓") || input.contains("喵")) ? "貓" : "狗";
+            fallback.put("species", species);
+            
+            // 年齡判斷
+            if (input.contains("小") || input.contains("幼")) {
+                fallback.put("age", species.equals("貓") ? "幼貓" : "幼犬");
+            } else if (input.contains("老") || input.contains("大")) {
+                fallback.put("age", "高齡");
+            } else {
+                fallback.put("age", "全年齡");
+            }
+            
+            // 體態判斷 (關鍵！)
+            if (input.contains("胖") || input.contains("重")) {
+                fallback.put("bodyType", species.equals("貓") ? "胖貓" : "胖犬");
+            } else {
+                fallback.put("bodyType", "全適用");
+            }
+            
+            fallback.put("useFor", input.contains("挑食") ? "挑食" : "一般");
+            return fallback;
+        }
+    }    
+    // 在類別內定義這個方法，紅線就會消失
+    private String askExternalGemini(String question) {
+        // 這裡未來可以對接真正的 API
+        return "針對您的問題「" + question + "」，建議您可以先觀察寵物食慾，若持續不適請諮詢獸醫。";
     }
 
+    
     // 5. 獲取飼料選單 (對應紫色區塊)
     @GetMapping("/get_foods")
     public List<Map<String, Object>> getFoods() {
@@ -227,13 +330,6 @@ public class PetController {
         return res;
     }
 
-    //新增健康紀錄 (體溫/體重)
-    @PostMapping("/add_health_log")
-    public Map<String, Object> addLog(@RequestBody Map<String, Object> log) {
-        String sql = "INSERT INTO HealthLogs (PetID, Weight, Temperature) VALUES (?, ?, ?)";
-        jdbcTemplate.update(sql, log.get("PetID"), log.get("Weight"), log.get("Temperature"));
-        return Map.of("status", "success");
-    }
 
     //就醫紀錄
     @PostMapping("/add_medical")
@@ -244,13 +340,28 @@ public class PetController {
     }
 
     //行事曆
-    @PostMapping("/add_event")
-    public Map<String, Object> addEvent(@RequestBody Map<String, Object> data) {
-        // 假設有一個 Events 表
-        String sql = "INSERT INTO Events (UserID, EventDate, Title) VALUES (?, ?, ?)";
-        jdbcTemplate.update(sql, data.get("UserID"), data.get("Date"), data.get("Title"));
-        return Map.of("status", "success");
+    @PostMapping("/events/add")
+    public Map<String, Object> addCalendarEvent(@RequestBody Map<String, Object> data) {
+        // 影片欄位：日期(Date)、時間(Time)、標題/內容(Title)
+        String sql = "INSERT INTO Events (UserID, PetID, EventDate, EventTime, Title) VALUES (?, ?, ?, ?, ?)";
+        
+        jdbcTemplate.update(sql, 
+            data.get("UserID"),
+            data.get("PetID"),
+            data.get("EventDate"),
+            data.get("EventTime"),
+            data.get("Title")
+        );
+        return Map.of("status", "success", "message", "行程已加入行事曆");
     }
+
+    // 4. 取得行事曆列表：顯示在影片中的日曆下方
+    @GetMapping("/events/{userId}")
+    public List<Map<String, Object>> getEvents(@PathVariable int userId) {
+        String sql = "SELECT * FROM Events WHERE UserID = ? ORDER BY EventDate ASC, EventTime ASC";
+        return jdbcTemplate.queryForList(sql, userId);
+    }
+
 
     //圖表
     @GetMapping("/get_chart_data/{petId}")
@@ -261,4 +372,57 @@ public class PetController {
                     "ORDER BY RecordTime ASC";
         return jdbcTemplate.queryForList(sql, petId);
     }   
+
+    @PostMapping("/api/assistant")
+        public Map<String, String> externalAiAssistant(@RequestBody Map<String, String> request) {
+            String userQuestion = request.get("question"); 
+            
+            // 改呼叫我們剛剛寫的模擬方法
+            String aiAnswer = askExternalGemini(userQuestion); 
+            
+            return Map.of("answer", aiAnswer);
+    }
+
+
+    @CrossOrigin(origins = "*")
+    @RequestMapping("/api/daily") // 加上前綴方便管理
+    
+    @PostMapping("/food")
+        public Map<String, Object> addFood(@RequestBody Map<String, Object> req) {
+            String sql = "INSERT INTO DailyFood (pet_id, calories) VALUES (?, ?)";
+            jdbcTemplate.update(sql, req.get("pet_id"), req.get("calories"));
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "進食資料已存入 Azure SQL");
+            return response;
+        }
+
+        // 2. 新增今日飲水量 (由硬體水盆或 App 呼叫)
+        @PostMapping("/water")
+        public Map<String, Object> addWater(@RequestBody Map<String, Object> req) {
+            String sql = "INSERT INTO DailyWater (pet_id, water_ml) VALUES (?, ?)";
+            jdbcTemplate.update(sql, req.get("pet_id"), req.get("water_ml"));
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("message", "飲水資料已存入 Azure SQL");
+            return response;
+        }
+
+        // 3. 更新每日總結 (通常由 App 計算達標率後呼叫)
+        @PostMapping("/summary")
+        public Map<String, Object> addSummary(@RequestBody Map<String, Object> req) {
+            String sql = "INSERT INTO DailySummary (pet_id, food_id, water_id, is_goal_achieved) VALUES (?, ?, ?, ?)";
+            jdbcTemplate.update(sql, 
+                req.get("pet_id"), 
+                req.get("food_id"), 
+                req.get("water_id"), 
+                req.get("is_goal_achieved")
+            );
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            return response;
+        }
 }

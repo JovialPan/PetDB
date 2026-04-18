@@ -1,2 +1,4 @@
 com\example\demo\DemoApplication.class
+com\example\demo\PetRequest.class
 com\example\demo\PetController.class
+com\example\demo\UserRequest.class
