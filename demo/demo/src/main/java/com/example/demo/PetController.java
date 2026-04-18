@@ -50,12 +50,12 @@ public class PetController {
     }
 
     //更新密碼
-    @PostMapping("/update_password") 
-    public Map<String, Object> updatePassword(@RequestBody UserRequest data) {
-        String sql = "UPDATE Users SET Password = ? WHERE Email = ?";
-        int rows = jdbcTemplate.update(sql, data.password, data.email);
-        return rows > 0 ? Map.of("status", "success") : Map.of("status", "fail", "message", "找不到該 Email");
-    }
+    //@PostMapping("/update_password") 
+    //public Map<String, Object> updatePassword(@RequestBody UserRequest data) {
+        //String sql = "UPDATE Users SET Password = ? WHERE Email = ?";
+       // int rows = jdbcTemplate.update(sql, data.password, data.email);
+        //return rows > 0 ? Map.of("status", "success") : Map.of("status", "fail", "message", "找不到該 Email");
+   // }
 
     // 3. 新增寵物 (加入計算邏輯)
     @PostMapping("/add")
@@ -163,7 +163,7 @@ public class PetController {
         @RequestParam String petType,   // 寵物種類 (貓/狗)
         @RequestParam String keyword    // 使用者在 AI 幫手點選或輸入的關鍵字
     ) {
-        // 使用正確的欄位名稱：UseFor
+        da
         String sql = "SELECT FoodID, Brand, Flavor, UseFor, AgeGroup, BodyType, Calories " +
                     "FROM Food " +
                     "WHERE (PetType = ? OR PetType = '全種') " + // 確保物種正確
