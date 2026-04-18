@@ -67,27 +67,30 @@ CREATE TABLE Snacks (
 );
 
 CREATE TABLE DailyFood (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    calories INT, 
-    record_date DATE DEFAULT GETDATE()
-    FOREIGN KEY (pet_id) REFERENCES Pets(PetID)
+    DailyFoodID INT PRIMARY KEY IDENTITY(1,1),
+    Calories INT, 
+    RecordDate DATE DEFAULT GETDATE()
+    FOREIGN KEY (PetID) REFERENCES Pets(PetID)
 );
 
 CREATE TABLE DailyWater (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    water_ml INT,  
-    record_date DATE DEFAULT GETDATE()
-    FOREIGN KEY (pet_id) REFERENCES Pets(PetID)
+    DailyWaterID INT PRIMARY KEY IDENTITY(1,1),
+    WaterML INT,  
+    RecordDate DATE DEFAULT GETDATE()
+    FOREIGN KEY (PetID) REFERENCES Pets(PetID)
 );
 
 CREATE TABLE DailySummary (
-    id INT PRIMARY KEY IDENTITY(1,1),
-    food_id INT,
-    water_id INT,      
-    FOREIGN KEY (food_id) REFERENCES DailyFood(id),
-    FOREIGN KEY (water_id) REFERENCES DailyWater(id)
+    SummaryID INT PRIMARY KEY IDENTITY(1,1),
+    PetID INT,
+    FoodID INT,
+    WaterID INT,
+    GoalAchieved BIT,
+    RecordDate DATE DEFAULT GETDATE(),
+    FOREIGN KEY (PetID) REFERENCES  Pets(PetID),   
+    FOREIGN KEY (FoodID) REFERENCES DailyFood(id),
+    FOREIGN KEY (WaterId) REFERENCES DailyWater(id)
 );
-
 
 CREATE TABLE Events (
     EventID INT PRIMARY KEY IDENTITY(1,1),
@@ -98,3 +101,11 @@ CREATE TABLE Events (
     Title NVARCHAR(255), 
     FOREIGN KEY (UserID) REFERENCES Users(UserID),
     FOREIGN KEY (PetID) REFERENCES Pets(PetID) 
+);
+
+CREATE TABLE Hospitals (
+    HospitalID INT PRIMARY KEY IDENTITY(1,1), 
+    Name NVARCHAR(100) NOT NULL,      
+    Address NVARCHAR(200) NOT NULL,   
+    Phone NVARCHAR(20) NOT NULL       
+);
