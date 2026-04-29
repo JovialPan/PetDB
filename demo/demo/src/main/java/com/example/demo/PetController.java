@@ -399,7 +399,7 @@ public class PetController {
     }
 
 
-    @PostMapping("/api/assistant")
+    @PostMapping("/api/assistant") //AI異常
         public Map<String, String> externalAiAssistant(@RequestBody Map<String, String> request) {
             String userQuestion = request.get("question"); 
             
