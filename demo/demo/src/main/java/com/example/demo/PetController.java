@@ -282,11 +282,10 @@ public class PetController {
     // 在類別內定義這個方法，紅線就會消失
         private String askExternalGemini(String question) {
 
-        String apiKey = "AIzaSyDviUdMMqGJUbHeadWIjlT4iNH6sN5Br2s"; // 建議之後改成環境變數
+        String apiKey = "AIzaSyA0hFpFyx6WIkJ2EmD_NhU_RjVRHOpYo00"; // 建議之後改成環境變數
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
-
-        try {
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
+        try{
             String prompt = "你是一位專業獸醫助理，請用自然、實用、簡單易懂的方式回答使用者問題：\n"
                     + question;
 
@@ -307,6 +306,7 @@ public class PetController {
                     client.send(request, HttpResponse.BodyHandlers.ofString());
 
             String body = response.body();
+            System.out.println("=== Gemini response: " + body);
 
             JsonObject json = JsonParser.parseString(body).getAsJsonObject();
 
@@ -322,7 +322,7 @@ public class PetController {
             e.printStackTrace();
             return "AI 暫時無法回應，請稍後再試";
         }
-    }
+    }    
 
     
     // 5. 獲取飼料選單 (對應紫色區塊)
@@ -438,12 +438,13 @@ public class PetController {
     }
 
 
-    // ✅ 修正：使用 AssistantRequest
     @PostMapping("/api/assistant")
     public String assistant(@RequestBody AssistantRequest request) {
+        System.out.println("=== assistant called, question: " + request.getQuestion());
         return askExternalGemini(request.getQuestion());
     }
-    
+
+    @CrossOrigin(origins = "*")    
     @PostMapping("/api/daily/food")
         public Map<String, Object> addFood(@RequestBody Map<String, Object> req) {
             String sql = "INSERT INTO DailyFood (pet_id, calories) VALUES (?, ?)";
@@ -468,7 +469,7 @@ public class PetController {
         }
 
         // 3. 更新每日總結 (通常由 App 計算達標率後呼叫)
-        @PostMapping("/api/daily/summary")
+        @PostMapping("/summary")
         public Map<String, Object> addSummary(@RequestBody Map<String, Object> req) {
             String sql = "INSERT INTO DailySummary (pet_id, food_id, water_id, is_goal_achieved) VALUES (?, ?, ?, ?)";
             jdbcTemplate.update(sql, 

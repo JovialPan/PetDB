@@ -1,13 +1,13 @@
 package com.example.demo;
 
 public class AssistantRequest {
-    private String prompt;
+    private String question;
 
     public String getQuestion() {
-        return prompt;
+        return question;
     }
 
-    public void setQuestion(String prompt) {
-        this.prompt = prompt;
+    public void setQuestion(String question) {
+        this.question = question;
     }
 }
