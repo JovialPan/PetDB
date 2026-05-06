@@ -280,9 +280,48 @@ public class PetController {
         }
     }    
     // 在類別內定義這個方法，紅線就會消失
-    private String askExternalGemini(String question) {
-        // 這裡未來可以對接真正的 API
-        return "針對您的問題「" + question + "」，建議您可以先觀察寵物食慾，若持續不適請諮詢獸醫。";
+        private String askExternalGemini(String question) {
+
+        String apiKey = "AIzaSyDviUdMMqGJUbHeadWIjlT4iNH6sN5Br2s"; // 建議之後改成環境變數
+
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + apiKey;
+
+        try {
+            String prompt = "你是一位專業獸醫助理，請用自然、實用、簡單易懂的方式回答使用者問題：\n"
+                    + question;
+
+            String payload =
+                    "{ \"contents\": [{ \"parts\": [{\"text\": \"" +
+                            prompt.replace("\"", "\\\"").replace("\n", "\\n") +
+                            "\"}]}]}";
+
+            HttpClient client = HttpClient.newHttpClient();
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(payload))
+                    .build();
+
+            HttpResponse<String> response =
+                    client.send(request, HttpResponse.BodyHandlers.ofString());
+
+            String body = response.body();
+
+            JsonObject json = JsonParser.parseString(body).getAsJsonObject();
+
+            return json.getAsJsonArray("candidates")
+                    .get(0).getAsJsonObject()
+                    .getAsJsonObject("content")
+                    .getAsJsonArray("parts")
+                    .get(0).getAsJsonObject()
+                    .get("text")
+                    .getAsString();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "AI 暫時無法回應，請稍後再試";
+        }
     }
 
     
@@ -399,21 +438,13 @@ public class PetController {
     }
 
 
-    @PostMapping("/api/assistant") //AI異常
-        public Map<String, String> externalAiAssistant(@RequestBody Map<String, String> request) {
-            String userQuestion = request.get("question"); 
-            
-            // 改呼叫我們剛剛寫的模擬方法
-            String aiAnswer = askExternalGemini(userQuestion); 
-            
-            return Map.of("answer", aiAnswer);
+    // ✅ 修正：使用 AssistantRequest
+    @PostMapping("/api/assistant")
+    public String assistant(@RequestBody AssistantRequest request) {
+        return askExternalGemini(request.getQuestion());
     }
-
-
-    @CrossOrigin(origins = "*")
-    @RequestMapping("/api/daily") // 加上前綴方便管理
     
-    @PostMapping("/food")
+    @PostMapping("/api/daily/food")
         public Map<String, Object> addFood(@RequestBody Map<String, Object> req) {
             String sql = "INSERT INTO DailyFood (pet_id, calories) VALUES (?, ?)";
             jdbcTemplate.update(sql, req.get("pet_id"), req.get("calories"));
@@ -425,7 +456,7 @@ public class PetController {
         }
 
         // 2. 新增今日飲水量 (由硬體水盆或 App 呼叫)
-        @PostMapping("/water")
+        @PostMapping("/api/daily/water")
         public Map<String, Object> addWater(@RequestBody Map<String, Object> req) {
             String sql = "INSERT INTO DailyWater (pet_id, water_ml) VALUES (?, ?)";
             jdbcTemplate.update(sql, req.get("pet_id"), req.get("water_ml"));
@@ -437,7 +468,7 @@ public class PetController {
         }
 
         // 3. 更新每日總結 (通常由 App 計算達標率後呼叫)
-        @PostMapping("/summary")
+        @PostMapping("/api/daily/summary")
         public Map<String, Object> addSummary(@RequestBody Map<String, Object> req) {
             String sql = "INSERT INTO DailySummary (pet_id, food_id, water_id, is_goal_achieved) VALUES (?, ?, ?, ?)";
             jdbcTemplate.update(sql, 
