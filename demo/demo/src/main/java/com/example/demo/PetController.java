@@ -509,7 +509,7 @@ public class PetController {
 
     
 
-@PostMapping(value = "/api/assistant/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+@PostMapping(value = "/api/assistant/image")
 public String assistantWithImage(
         @RequestParam("question") String question,
         @RequestParam("image") MultipartFile image
