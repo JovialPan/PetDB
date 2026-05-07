@@ -1,15 +1,11 @@
 package com.example.demo;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,10 +15,23 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import java.io.IOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
 @CrossOrigin(origins = "*")
 @RestController
 @RequestMapping("/") 
@@ -219,7 +228,7 @@ public class PetController {
 
     @SuppressWarnings("unchecked")
     private Map<String, String> callGeminiToExtractTags(String input) {
-        String apiKey = "AIzaSyCuFEs8bg3sFmtUvNXQHwkpvao-TS0fYiQ"; 
+        String apiKey = "AIzaSyA0hFpFyx6WIkJ2EmD_NhU_RjVRHOpYo00"; 
         try {
             String url = "https://generativelanguage.googleapis.com/v1beta/models/google/gemini-1.5-flash:generateContent?key=" + apiKey;
             
@@ -323,6 +332,66 @@ public class PetController {
             return "AI 暫時無法回應，請稍後再試";
         }
     }    
+    private String askExternalGeminiWithImage(String question, MultipartFile image) throws IOException {
+
+    String base64Image = Base64.getEncoder().encodeToString(image.getBytes());
+
+    String mimeType = image.getContentType();
+    if (mimeType == null || mimeType.isEmpty()) {
+        mimeType = "image/jpeg";
+    }
+
+    System.out.println("mimeType = " + mimeType);
+    System.out.println("base64 length = " + base64Image.length());
+
+        String apiKey = "AIzaSyA0hFpFyx6WIkJ2EmD_NhU_RjVRHOpYo00"; // 建議之後改成環境變數
+
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
+
+    Map<String, Object> textPart = new HashMap<>();
+    textPart.put("text", question);
+
+    Map<String, Object> inlineData = new HashMap<>();
+    inlineData.put("mime_type", mimeType);
+    inlineData.put("data", base64Image);
+
+    Map<String, Object> imagePart = new HashMap<>();
+    imagePart.put("inline_data", inlineData);
+
+    Map<String, Object> content = new HashMap<>();
+    content.put("parts", List.of(textPart, imagePart));
+
+    Map<String, Object> requestBody = new HashMap<>();
+    requestBody.put("contents", List.of(content));
+
+    RestTemplate restTemplate = new RestTemplate();
+
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.APPLICATION_JSON);
+
+    HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+    ResponseEntity<Map> response = restTemplate.postForEntity(url, entity, Map.class);
+
+    Map body = response.getBody();
+
+    System.out.println("Gemini image response body: " + body);
+
+    try {
+        List candidates = (List) body.get("candidates");
+        Map firstCandidate = (Map) candidates.get(0);
+
+        Map contentMap = (Map) firstCandidate.get("content");
+        List parts = (List) contentMap.get("parts");
+        Map firstPart = (Map) parts.get(0);
+
+        return firstPart.get("text").toString();
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        return "Gemini 回傳格式解析失敗：" + body;
+    }
+}
 
     
     // 5. 獲取飼料選單 (對應紫色區塊)
@@ -438,11 +507,41 @@ public class PetController {
     }
 
 
-    @PostMapping("/api/assistant")
-    public String assistant(@RequestBody AssistantRequest request) {
-        System.out.println("=== assistant called, question: " + request.getQuestion());
-        return askExternalGemini(request.getQuestion());
+    
+
+@PostMapping(value = "/api/assistant/image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+public String assistantWithImage(
+        @RequestParam("question") String question,
+        @RequestParam("image") MultipartFile image
+) {
+    try {
+        System.out.println("=== assistant image called, question: " + question);
+        System.out.println("image name: " + image.getOriginalFilename());
+        System.out.println("image type: " + image.getContentType());
+        System.out.println("image size: " + image.getSize());
+
+        return askExternalGeminiWithImage(question, image);
+
+    } catch (HttpClientErrorException e) {
+        e.printStackTrace();
+
+        return "Gemini HTTP 錯誤："
+                + e.getStatusCode()
+                + "\n\nGemini 回傳內容：\n"
+                + e.getResponseBodyAsString();
+
+    } catch (Exception e) {
+        e.printStackTrace();
+
+        return "後端錯誤："
+                + e.getClass().getName()
+                + " - "
+                + e.getMessage();
     }
+}
+
+
+    
 
     @CrossOrigin(origins = "*")    
     @PostMapping("/api/daily/food")
