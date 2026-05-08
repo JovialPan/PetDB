@@ -187,7 +187,7 @@ public class PetController {
     public Map<String, Object> aiRecommend(@RequestParam String userInput) {
         // 1. 取得 AI 解析標籤
         Map<String, String> aiTags = callGeminiToExtractTags(userInput);
-        
+        System.out.println("=== aiTags: " + aiTags);
         String species = aiTags.getOrDefault("species", "狗"); 
         String age = aiTags.getOrDefault("age", "全年齡");
         String useFor = aiTags.getOrDefault("useFor", "一般");
@@ -230,16 +230,16 @@ public class PetController {
     private Map<String, String> callGeminiToExtractTags(String input) {
         String apiKey = "AIzaSyDZJnBPmT-GE8lJPhY8fpAUzJSWRi7FYtA"; 
         try {
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/google/gemini-1.5-flash:generateContent?key=" + apiKey;
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
             
             // 強化 Prompt：加入 bodyType 判斷
             String prompt = "使用者說：'" + input + "'。分析需求並回傳 JSON。規則：\n" +
-                            "1. species: '貓' 或 '狗'。\n" +
-                            "2. age: '幼貓'、'幼犬'、'全年齡'、'熟齡' 或 '高齡'。\n" +
-                            "3. useFor: 挑食、體重管理等 Excel 標籤，沒提到回傳 '一般'。\n" +
-                            "4. bodyType: 提到'胖'且是狗回傳 '胖犬'；是貓回傳 '胖貓'。否則回傳 '全適用'。\n" +
-                            "回傳純 JSON 範例：{\"species\":\"狗\",\"age\":\"全年齡\",\"useFor\":\"一般\",\"bodyType\":\"胖犬\"}";
-
+                        "1. species: '貓' 或 '狗'。\n" +
+                        "2. age: '幼貓'、'幼犬'、'全年齡'、'熟齡' 或 '高齡'。\n" +
+                        "3. useFor: 從以下關鍵字選一個最相關的，沒提到回傳 '一般'：\n" +
+                        "   挑食、毛髮、皮膚、體重管理、消化、腸胃、免疫、關節、心臟、腎臟、泌尿、大腦發育、肌肉\n" +
+                        "4. bodyType: 提到'胖'且是狗回傳 '胖犬'；是貓回傳 '胖貓'。否則回傳 '全適用'。\n" +
+                        "回傳純 JSON，不要有任何其他文字。";
             String payload = "{\"contents\": [{\"parts\":[{\"text\": \"" + prompt.replace("\"", "\\\"").replace("\n", "\\n") + "\"}]}]}";
 
             HttpClient client = HttpClient.newHttpClient();
