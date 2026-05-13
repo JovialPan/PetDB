@@ -223,7 +223,7 @@ public class PetController {
         response.put("ai_analysis", "AI 分析 - 種類：" + species + "，年齡：" + age + 
                                     "，體態：" + bodyType + "，需求：" + useFor);
         
-        return response;
+        return foods;
     }
 
     @SuppressWarnings("unchecked")
@@ -239,7 +239,7 @@ public class PetController {
                         "3. useFor: 從以下關鍵字選一個最相關的，沒提到回傳 '一般'：\n" +
                         "   挑食、毛髮、皮膚、體重管理、消化、腸胃、免疫、關節、心臟、腎臟、泌尿、大腦發育、肌肉\n" +
                         "4. bodyType: 提到'胖'且是狗回傳 '胖犬'；是貓回傳 '胖貓'。否則回傳 '全適用'。\n" +
-                        "回傳純 JSON，不要有任何其他文字。";
+                        "回傳純 JSON 範例：{\"species\":\"狗\",\"age\":\"全年齡\",\"useFor\":\"一般\",\"bodyType\":\"胖犬\"}";
             String payload = "{\"contents\": [{\"parts\":[{\"text\": \"" + prompt.replace("\"", "\\\"").replace("\n", "\\n") + "\"}]}]}";
 
             HttpClient client = HttpClient.newHttpClient();
