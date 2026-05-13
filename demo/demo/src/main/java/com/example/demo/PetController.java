@@ -228,7 +228,7 @@ public class PetController {
 
     @SuppressWarnings("unchecked")
     private Map<String, String> callGeminiToExtractTags(String input) {
-        String apiKey = "AIzaSyDZJnBPmT-GE8lJPhY8fpAUzJSWRi7FYtA"; 
+        String apiKey = "AIzaSyDNU0u83hdayz5iJqnUNBhK87mkdM1FuFs"; 
         try {
             String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
             
@@ -291,7 +291,7 @@ public class PetController {
     // 在類別內定義這個方法，紅線就會消失
         private String askExternalGemini(String question) {
 
-        String apiKey = "AIzaSyDZJnBPmT-GE8lJPhY8fpAUzJSWRi7FYtA"; // 建議之後改成環境變數
+        String apiKey = "AIzaSyDNU0u83hdayz5iJqnUNBhK87mkdM1FuFs"; // 建議之後改成環境變數
 
         String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
         try{
@@ -344,7 +344,7 @@ public class PetController {
     System.out.println("mimeType = " + mimeType);
     System.out.println("base64 length = " + base64Image.length());
 
-        String apiKey = "AIzaSyDZJnBPmT-GE8lJPhY8fpAUzJSWRi7FYtA"; // 建議之後改成環境變數
+        String apiKey = "AIzaSyDNU0u83hdayz5iJqnUNBhK87mkdM1FuFs"; // 建議之後改成環境變數
 
         String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
 
