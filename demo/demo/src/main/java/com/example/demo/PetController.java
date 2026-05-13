@@ -223,7 +223,7 @@ public class PetController {
         response.put("ai_analysis", "AI 分析 - 種類：" + species + "，年齡：" + age + 
                                     "，體態：" + bodyType + "，需求：" + useFor);
         
-        return foods;
+        return response;
     }
 
     @SuppressWarnings("unchecked")
@@ -295,7 +295,7 @@ public class PetController {
 
         String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
         try{
-            String prompt = "你是一位專業獸醫助理，請用自然、實用、簡單易懂的方式回答使用者問題：\n"
+            String prompt = "你是一位專業獸醫助理，請用自然、實用、簡單易懂的方式回答使用者問題，並一律使用繁體中文(台灣用語)回答，禁止使用簡體中文：\n"
                     + question;
 
             String payload =
