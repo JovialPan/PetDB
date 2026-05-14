@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
@@ -22,6 +23,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
@@ -34,14 +36,114 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 @CrossOrigin(origins = "*")
 @RestController
-@RequestMapping("/") 
-@SuppressWarnings("all") 
+@RequestMapping("/")
+@SuppressWarnings("all")
 public class PetController {
+    @PostMapping(
+        value = "/api/assistant",
+        consumes = MediaType.APPLICATION_JSON_VALUE,
+        produces = MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"
+    )
+    public ResponseEntity<String> askAssistant(@RequestBody Map<String, Object> body) {
+
+        try {
+            String question = String.valueOf(body.getOrDefault("question", "")).trim();
+
+            if (question.isEmpty()) {
+                return ResponseEntity.badRequest().body("缺少 question 欄位");
+            }
+
+            // 呼叫 Gemini，取得 AI 回答
+            String answer = callGeminiAssistant(question);
+
+            // 把 Gemini 的回答回傳給 Android 前端
+            return ResponseEntity.ok(answer);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(500).body("AI 回答失敗：" + e.getMessage());
+        }
+    }
+
+    private String callGeminiAssistant(String question) throws Exception {
+
+        // 測試階段可以先直接放 API Key
+        // 正式版本不要直接寫死在程式碼裡
+        String apiKey = "api";
+
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
+
+        String prompt =
+                "你是一位寵物照護 AI 助手，請用繁體中文回答。\n" +
+                "請根據使用者的問題，提供清楚、溫和、實用的寵物照護建議。\n" +
+                "如果問題可能涉及疾病、呼吸困難、中毒、持續嘔吐、抽搐、流血、精神不佳等狀況，請提醒使用者盡快帶寵物就醫。\n" +
+                "不要假裝自己是獸醫，也不要做絕對診斷。\n" +
+                "回答請控制在 3 到 6 句，適合顯示在手機聊天畫面。\n\n" +
+                "使用者問題：" + question;
+
+        Map<String, Object> requestBody = Map.of(
+                "contents", List.of(
+                        Map.of(
+                                "parts", List.of(
+                                        Map.of("text", prompt)
+                                )
+                        )
+                ),
+                "generationConfig", Map.of(
+                        "temperature", 0.7,
+                        "maxOutputTokens", 1024
+                )
+        );
+
+        String jsonBody = new Gson().toJson(requestBody);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(url))
+                .header("Content-Type", "application/json; charset=UTF-8")
+                .POST(HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8))
+                .build();
+
+        HttpClient client = HttpClient.newHttpClient();
+
+        HttpResponse<String> response = client.send(
+                request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+        );
+
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            throw new RuntimeException("Gemini API 錯誤：" + response.statusCode() + "\n" + response.body());
+        }
+
+        JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
+
+        JsonArray candidates = root.getAsJsonArray("candidates");
+
+        if (candidates == null || candidates.size() == 0) {
+            return "抱歉，我目前沒有取得 AI 回覆，請稍後再試。";
+        }
+
+        JsonObject firstCandidate = candidates.get(0).getAsJsonObject();
+        JsonObject content = firstCandidate.getAsJsonObject("content");
+        JsonArray parts = content.getAsJsonArray("parts");
+
+        if (parts == null || parts.size() == 0) {
+            return "抱歉，AI 回覆內容為空。";
+        }
+
+        JsonObject firstPart = parts.get(0).getAsJsonObject();
+
+        if (!firstPart.has("text")) {
+            return "抱歉，AI 回覆格式不正確。";
+        }
+
+        return firstPart.get("text").getAsString().trim();
+    }
+    
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    //註冊 
+    //註冊
     @PostMapping("/register")
     public Map<String, Object> register(@RequestBody UserRequest data) {
         Map<String, Object> res = new HashMap<>();
@@ -62,8 +164,7 @@ public class PetController {
         res.put("status", "success");
         return res;
     }
-
-    //登入 
+    //登入
     @PostMapping("/login")
     public Map<String, Object> login(@RequestBody UserRequest data) {
         Map<String, Object> res = new HashMap<>();
@@ -79,7 +180,7 @@ public class PetController {
     }
 
     //更新密碼
-    @PostMapping("/update_password") 
+    @PostMapping("/update_password")
     public Map<String, Object> updatePassword(@RequestBody UserRequest data) {
         String sql = "UPDATE Users SET Password = ? WHERE Email = ?";
         int rows = jdbcTemplate.update(sql, data.password, data.email);
@@ -97,40 +198,43 @@ public class PetController {
             res.put("message", "UserID 或 寵物姓名 缺失");
             return res;
         }
-
-        // 2. 限制 Species 只能是貓或狗 
+        // 2. 限制 Species 只能是貓或狗
         if (!"貓".equals(data.Species) && !"狗".equals(data.Species)) {
             res.put("status", "fail");
             res.put("message", "物種格式錯誤"); // 這裡簡化訊息即可
             return res;
         }
+        // 3. 處理 BodyType：只有狗有大中小，貓則設為 null
 
-        // 3. 處理 BodyType：只有狗有大中小，貓則設為 null 
         String finalBodyType = data.BodyType;
         if ("貓".equals(data.Species)) {
             finalBodyType = null; // 貓咪不需要體態選單，強制設為空值
         } else {
             // 如果前端選單是 [小型, 中型, 大型]，這裡做一個基本的保護
             if (finalBodyType == null || finalBodyType.isEmpty()) {
-                finalBodyType = "中型"; 
+                finalBodyType = "中型";
             }
         }
-
         // 4. 性別檢查 (如果需要更嚴謹)
         if (!"公".equals(data.Gender) && !"母".equals(data.Gender)) {
             // 也可以視情況決定是否要擋掉，或預設一個值
         }
-
-        // 5. 執行 SQL 插入 
+        // 5. 執行 SQL 插入
         String sql = "INSERT INTO Pets (UserID, PetName, Species, Birthday, Gender, IsSterilized, Weight) " +
                      "VALUES (?, ?, ?, ?, ?, ?, ?)";
-        
-        jdbcTemplate.update(sql, 
-            data.UserID, data.PetName, data.Gender, data.Species, 
-            data.Birthday, data.Weight, data.FoodID, data.Activity, 
+
+        jdbcTemplate.update(sql,
+
+            data.UserID, data.PetName, data.Gender, data.Species,
+
+            data.Birthday, data.Weight, data.FoodID, data.Activity,
+
             finalBodyType, data.IsSterilized ? 1 : 0);
 
-        // 5. 計算建議量 (貓狗係數不同) 
+
+
+        // 5. 計算建議量 (貓狗係數不同)
+
         double weight = (data.Weight != null) ? data.Weight : 0;
         double rer = 70 * Math.pow(weight, 0.75);
         double factor = 1.0;
@@ -151,7 +255,6 @@ public class PetController {
         return res;
     }
 
-   
     @PostMapping("/recommend_foods")
     public List<Map<String, Object>> recommendFoods(@RequestBody PetRequest pet) {
         // 確保 pet 不是 null 避免警告
@@ -169,10 +272,10 @@ public class PetController {
 
         if (pet.Birthday != null) {
             sql.append(" AND (AgeGroup LIKE ? OR AgeGroup = '全年齡') ");
-            params.add("%成年%"); 
+            params.add("%成年%");
         }
+        if (pet.Activity != null) {
 
-        if (pet.Activity != null) { 
             sql.append(" AND (UseFor LIKE ? OR Flavor LIKE ?) ");
             String keyword = "%" + pet.Activity + "%";
             params.add(keyword);
@@ -188,7 +291,9 @@ public class PetController {
         // 1. 取得 AI 解析標籤
         Map<String, String> aiTags = callGeminiToExtractTags(userInput);
         System.out.println("=== aiTags: " + aiTags);
-        String species = aiTags.getOrDefault("species", "狗"); 
+
+        String species = aiTags.getOrDefault("species", "狗");
+
         String age = aiTags.getOrDefault("age", "全年齡");
         String useFor = aiTags.getOrDefault("useFor", "一般");
         String bodyType = aiTags.getOrDefault("bodyType", "全適用");
@@ -220,18 +325,18 @@ public class PetController {
         // 7. 回傳結果
         Map<String, Object> response = new HashMap<>();
         response.put("recommended_foods", foods);
-        response.put("ai_analysis", "AI 分析 - 種類：" + species + "，年齡：" + age + 
+        response.put("ai_analysis", "AI 分析 - 種類：" + species + "，年齡：" + age +
                                     "，體態：" + bodyType + "，需求：" + useFor);
-        
+
         return response;
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, String> callGeminiToExtractTags(String input) {
-        String apiKey = "AIzaSyDNU0u83hdayz5iJqnUNBhK87mkdM1FuFs"; 
+
+        String apiKey = "api";
         try {
             String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
-            
             // 強化 Prompt：加入 bodyType 判斷
             String prompt = "使用者說：'" + input + "'。分析需求並回傳 JSON。規則：\n" +
                         "1. species: '貓' 或 '狗'。\n" +
@@ -267,7 +372,6 @@ public class PetController {
             Map<String, String> fallback = new HashMap<>();
             String species = (input.contains("貓") || input.contains("喵")) ? "貓" : "狗";
             fallback.put("species", species);
-            
             // 年齡判斷
             if (input.contains("小") || input.contains("幼")) {
                 fallback.put("age", species.equals("貓") ? "幼貓" : "幼犬");
@@ -276,14 +380,12 @@ public class PetController {
             } else {
                 fallback.put("age", "全年齡");
             }
-            
             // 體態判斷 (關鍵！)
             if (input.contains("胖") || input.contains("重")) {
                 fallback.put("bodyType", species.equals("貓") ? "胖貓" : "胖犬");
             } else {
                 fallback.put("bodyType", "全適用");
             }
-            
             fallback.put("useFor", input.contains("挑食") ? "挑食" : "一般");
             return fallback;
         }
@@ -291,7 +393,7 @@ public class PetController {
     // 在類別內定義這個方法，紅線就會消失
         private String askExternalGemini(String question) {
 
-        String apiKey = "AIzaSyDNU0u83hdayz5iJqnUNBhK87mkdM1FuFs"; // 建議之後改成環境變數
+        String apiKey = "api"; // 建議之後改成環境變數
 
         String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
         try{
@@ -344,7 +446,7 @@ public class PetController {
     System.out.println("mimeType = " + mimeType);
     System.out.println("base64 length = " + base64Image.length());
 
-        String apiKey = "AIzaSyDNU0u83hdayz5iJqnUNBhK87mkdM1FuFs"; // 建議之後改成環境變數
+        String apiKey = "api"; // 建議之後改成環境變數
 
         String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
 
@@ -393,7 +495,6 @@ public class PetController {
     }
 }
 
-    
     // 5. 獲取飼料選單 (對應紫色區塊)
     @GetMapping("/get_foods")
     public List<Map<String, Object>> getFoods() {
@@ -412,7 +513,6 @@ public class PetController {
     @PostMapping("/add_snack_record")
     public Map<String, Object> addSnackRecord(@RequestBody Map<String, Object> data) {
         Map<String, Object> res = new HashMap<>();
-        
         String name = (String) data.get("Name");
         // 確保熱量轉為 Double 處理
         Double calories = Double.valueOf(data.get("Calories").toString());
@@ -438,7 +538,6 @@ public class PetController {
         return res;
     }
 
-
     //就醫紀錄
     @PostMapping("/add_medical")
     public Map<String, Object> addMedical(@RequestBody Map<String, Object> data) {
@@ -452,8 +551,8 @@ public class PetController {
     public Map<String, Object> addCalendarEvent(@RequestBody Map<String, Object> data) {
         // 影片欄位：日期(Date)、時間(Time)、標題/內容(Title)
         String sql = "INSERT INTO Events (UserID, PetID, EventDate, EventTime, Title) VALUES (?, ?, ?, ?, ?)";
-        
-        jdbcTemplate.update(sql, 
+        jdbcTemplate.update(sql,
+
             data.get("UserID"),
             data.get("PetID"),
             data.get("EventDate"),
@@ -476,7 +575,7 @@ public class PetController {
     public List<Map<String, Object>> getWeekFood(@PathVariable int petId) {
 
         String sql = """
-            SELECT 
+            SELECT
                 CAST(RecordDate AS DATE) as Date,
                 SUM(Calories) as total_calories
             FROM DailyFood
@@ -493,7 +592,7 @@ public class PetController {
     public List<Map<String, Object>> getWeekWater(@PathVariable int petId) {
 
         String sql = """
-            SELECT 
+            SELECT
                 CAST(RecordDate AS DATE) as Date,
                 SUM(WaterML) as total_water
             FROM DailyWater
@@ -506,8 +605,6 @@ public class PetController {
         return jdbcTemplate.queryForList(sql, petId);
     }
 
-
-    
 
 @PostMapping(value = "/api/assistant/image")
 public String assistantWithImage(
@@ -540,15 +637,11 @@ public String assistantWithImage(
     }
 }
 
-
-    
-
     @CrossOrigin(origins = "*")    
     @PostMapping("/api/daily/food")
         public Map<String, Object> addFood(@RequestBody Map<String, Object> req) {
             String sql = "INSERT INTO DailyFood (pet_id, calories) VALUES (?, ?)";
             jdbcTemplate.update(sql, req.get("pet_id"), req.get("calories"));
-            
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
             response.put("message", "進食資料已存入 Azure SQL");
@@ -559,8 +652,7 @@ public String assistantWithImage(
         @PostMapping("/api/daily/water")
         public Map<String, Object> addWater(@RequestBody Map<String, Object> req) {
             String sql = "INSERT INTO DailyWater (pet_id, water_ml) VALUES (?, ?)";
-            jdbcTemplate.update(sql, req.get("pet_id"), req.get("water_ml"));
-            
+            jdbcTemplate.update(sql, req.get("pet_id"), req.get("water_ml"));          
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
             response.put("message", "飲水資料已存入 Azure SQL");
@@ -571,15 +663,60 @@ public String assistantWithImage(
         @PostMapping("/summary")
         public Map<String, Object> addSummary(@RequestBody Map<String, Object> req) {
             String sql = "INSERT INTO DailySummary (pet_id, food_id, water_id, is_goal_achieved) VALUES (?, ?, ?, ?)";
-            jdbcTemplate.update(sql, 
-                req.get("pet_id"), 
-                req.get("food_id"), 
-                req.get("water_id"), 
+            jdbcTemplate.update(sql,
+                req.get("pet_id"),
+                req.get("food_id"),
+                req.get("water_id"),
                 req.get("is_goal_achieved")
             );
-            
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
             return response;
         }
+    public class AssistantController {
+    // 純文字 AI 問答 API
+    @PostMapping(
+            value = "/assistant",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.TEXT_PLAIN_VALUE
+    )
+    public ResponseEntity<String> askAssistant(@RequestBody Map<String, Object> body) {
+
+        String question = String.valueOf(body.getOrDefault("question", "")).trim();
+
+        if (question.isEmpty()) {
+            return ResponseEntity.badRequest().body("缺少 question 欄位");
+        }
+
+        // 先測試是否成功連線
+        return ResponseEntity.ok("後端已收到你的問題：" + question);
+    }
+
+    // 圖片 / 檔案 AI 問答 API
+    @PostMapping(
+            value = "/assistant/image",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.TEXT_PLAIN_VALUE
+    )
+    public ResponseEntity<String> askAssistantWithImage(
+            @RequestParam("question") String question,
+            @RequestParam("image") MultipartFile image
+    ) {
+
+        if (question == null || question.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("缺少 question 欄位");
+        }
+
+        if (image == null || image.isEmpty()) {
+            return ResponseEntity.badRequest().body("缺少 image 檔案");
+        }
+
+        return ResponseEntity.ok(
+                "後端已收到附檔問題：\n" +
+                "問題：" + question + "\n" +
+                "檔名：" + image.getOriginalFilename() + "\n" +
+                "大小：" + image.getSize() + " bytes"
+        );
+    }
+}    
 }
