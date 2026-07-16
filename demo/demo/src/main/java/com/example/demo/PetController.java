@@ -6,6 +6,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -39,29 +40,58 @@ import org.springframework.web.client.RestTemplate;
 @RequestMapping("/")
 @SuppressWarnings("all")
 public class PetController {
+    
+    @Value("${gemini.api.key}")
+    private String apiKey;
     @PostMapping(
         value = "/api/assistant",
         consumes = MediaType.APPLICATION_JSON_VALUE,
-        produces = MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"
+        produces = MediaType.APPLICATION_JSON_VALUE
+        // produces = MediaType.TEXT_PLAIN_VALUE + ";charset=UTF-8"
     )
-    public ResponseEntity<String> askAssistant(@RequestBody Map<String, Object> body) {
+    public ResponseEntity<Map<String,Object>> askAssistant(@RequestBody Map<String, Object> body) {
 
         try {
             String question = String.valueOf(body.getOrDefault("question", "")).trim();
 
             if (question.isEmpty()) {
-                return ResponseEntity.badRequest().body("缺少 question 欄位");
+                Map<String,Object> error = new HashMap<>();
+                error.put("status","fail");
+                error.put("message","缺少 question 欄位");
+
+                return ResponseEntity.badRequest().body(error);
+                // return ResponseEntity.badRequest().body("缺少 question 欄位");
             }
 
             // 呼叫 Gemini，取得 AI 回答
             String answer = callGeminiAssistant(question);
+            boolean recommendHospital = answer.contains("[RECOMMEND_HOSPITAL]");
 
+            answer = answer.replace("[RECOMMEND_HOSPITAL]", "").trim();
+
+            Map<String,Object> result = new HashMap<>();
+
+            result.put("answer", answer);
+
+            // 如果需要推薦醫院
+            if(recommendHospital){
+
+                result.put("hospital", getHospital());
+
+            }
+            return ResponseEntity.ok(result);
             // 把 Gemini 的回答回傳給 Android 前端
-            return ResponseEntity.ok(answer);
+            //return ResponseEntity.ok(answer);
 
         } catch (Exception e) {
             e.printStackTrace();
-            return ResponseEntity.status(500).body("AI 回答失敗：" + e.getMessage());
+            Map<String,Object> error = new HashMap<>();
+
+            error.put("status","fail");
+            error.put("message","AI 回答失敗：" + e.getMessage());
+
+            return ResponseEntity.status(500).body(error);
+            // return ResponseEntity.status(500).body("AI 回答失敗：" + e.getMessage());
         }
     }
 
@@ -69,16 +99,25 @@ public class PetController {
 
         // 測試階段可以先直接放 API Key
         // 正式版本不要直接寫死在程式碼裡
-        String apiKey = "api";
+        // String apiKey = apiKey;
+                        
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + apiKey;
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
-
-        String prompt =
-                "你是一位寵物照護 AI 助手，請用繁體中文回答。\n" +
+        // String prompt =
+        //         "你是一位寵物照護 AI 助手，請用繁體中文回答。\n" +
+        //         "請根據使用者的問題，提供清楚、溫和、實用的寵物照護建議。\n" +
+        //         "如果問題可能涉及疾病、呼吸困難、中毒、持續嘔吐、抽搐、流血、精神不佳等狀況，請提醒使用者盡快帶寵物就醫。\n" +
+        //         "不要假裝自己是獸醫，也不要做絕對診斷。\n" +
+        //         "回答請控制在 3 到 6 句，適合顯示在手機聊天畫面。\n\n" +
+        //         "使用者問題：" + question;
+            String prompt =
+                "你是一位寵物照護助手，請用繁體中文回答。\n" +
                 "請根據使用者的問題，提供清楚、溫和、實用的寵物照護建議。\n" +
-                "如果問題可能涉及疾病、呼吸困難、中毒、持續嘔吐、抽搐、流血、精神不佳等狀況，請提醒使用者盡快帶寵物就醫。\n" +
+                "如果問題可能涉及疾病、呼吸困難、中毒、持續嘔吐、抽搐、流血、精神不佳等狀況，請提醒使用者盡快帶寵物就醫，並在最後一行額外輸出：" +
+                "[RECOMMEND_HOSPITAL]\n" +
+                "除了危急的情況，不可以輸出這段文字。\n" +
                 "不要假裝自己是獸醫，也不要做絕對診斷。\n" +
-                "回答請控制在 3 到 6 句，適合顯示在手機聊天畫面。\n\n" +
+                "回答請控制在 3 到 6 句。\n\n" +
                 "使用者問題：" + question;
 
         Map<String, Object> requestBody = Map.of(
@@ -137,6 +176,13 @@ public class PetController {
         }
 
         return firstPart.get("text").getAsString().trim();
+    }
+    private List<Map<String,Object>> getHospital(){
+        String sql =
+                "SELECT TOP 3 Name, Address, Phone " +
+                "FROM Hospitals";
+
+        return jdbcTemplate.queryForList(sql);
     }
     
 
@@ -334,9 +380,9 @@ public class PetController {
     @SuppressWarnings("unchecked")
     private Map<String, String> callGeminiToExtractTags(String input) {
 
-        String apiKey = "api";
+        //String apiKey = "api";
         try {
-            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + apiKey;
             // 強化 Prompt：加入 bodyType 判斷
             String prompt = "使用者說：'" + input + "'。分析需求並回傳 JSON。規則：\n" +
                         "1. species: '貓' 或 '狗'。\n" +
@@ -393,9 +439,9 @@ public class PetController {
     // 在類別內定義這個方法，紅線就會消失
         private String askExternalGemini(String question) {
 
-        String apiKey = "api"; // 建議之後改成環境變數
+        //String apiKey = "api"; // 建議之後改成環境變數
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + apiKey;        
         try{
             String prompt = "你是一位專業獸醫助理，請用自然、實用、簡單易懂的方式回答使用者問題，並一律使用繁體中文(台灣用語)回答，禁止使用簡體中文：\n"
                     + question;
@@ -446,9 +492,9 @@ public class PetController {
     System.out.println("mimeType = " + mimeType);
     System.out.println("base64 length = " + base64Image.length());
 
-        String apiKey = "api"; // 建議之後改成環境變數
+        //String apiKey = "api"; // 建議之後改成環境變數
 
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + apiKey;        
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + apiKey;        
 
     Map<String, Object> textPart = new HashMap<>();
     textPart.put("text", question);
@@ -674,49 +720,53 @@ public String assistantWithImage(
             return response;
         }
     public class AssistantController {
-    // 純文字 AI 問答 API
-    @PostMapping(
-            value = "/assistant",
-            consumes = MediaType.APPLICATION_JSON_VALUE,
-            produces = MediaType.TEXT_PLAIN_VALUE
-    )
-    public ResponseEntity<String> askAssistant(@RequestBody Map<String, Object> body) {
+     // 純文字 AI 問答 API
+        //@PostMapping(
+                //value = "/assistant",
+                //consumes = MediaType.APPLICATION_JSON_VALUE,
+                //produces = MediaType.APPLICATION_JSON_VALUE
+                //produces = MediaType.TEXT_PLAIN_VALUE
+        //)
+        // public ResponseEntity<String> askAssistant(@RequestBody Map<String, Object> body) {
 
-        String question = String.valueOf(body.getOrDefault("question", "")).trim();
+        //     String question = String.valueOf(body.getOrDefault("question", "")).trim();
 
-        if (question.isEmpty()) {
-            return ResponseEntity.badRequest().body("缺少 question 欄位");
+        //     if (question.isEmpty()) {
+        //         return ResponseEntity.badRequest().body("缺少 question 欄位");
+        //     }
+
+        //     // 先測試是否成功連線
+        //     return ResponseEntity.ok("後端已收到你的問題：" + question);
+        // }
+
+
+
+
+        // 圖片 / 檔案 AI 問答 API
+        @PostMapping(
+                value = "/assistant/image",
+                consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                produces = MediaType.TEXT_PLAIN_VALUE
+        )
+        public ResponseEntity<String> askAssistantWithImage(
+                @RequestParam("question") String question,
+                @RequestParam("image") MultipartFile image
+        ) {
+
+            if (question == null || question.trim().isEmpty()) {
+                return ResponseEntity.badRequest().body("缺少 question 欄位");
+            }
+
+            if (image == null || image.isEmpty()) {
+                return ResponseEntity.badRequest().body("缺少 image 檔案");
+            }
+
+            return ResponseEntity.ok(
+                    "後端已收到附檔問題：\n" +
+                    "問題：" + question + "\n" +
+                    "檔名：" + image.getOriginalFilename() + "\n" +
+                    "大小：" + image.getSize() + " bytes"
+            );
         }
-
-        // 先測試是否成功連線
-        return ResponseEntity.ok("後端已收到你的問題：" + question);
-    }
-
-    // 圖片 / 檔案 AI 問答 API
-    @PostMapping(
-            value = "/assistant/image",
-            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
-            produces = MediaType.TEXT_PLAIN_VALUE
-    )
-    public ResponseEntity<String> askAssistantWithImage(
-            @RequestParam("question") String question,
-            @RequestParam("image") MultipartFile image
-    ) {
-
-        if (question == null || question.trim().isEmpty()) {
-            return ResponseEntity.badRequest().body("缺少 question 欄位");
-        }
-
-        if (image == null || image.isEmpty()) {
-            return ResponseEntity.badRequest().body("缺少 image 檔案");
-        }
-
-        return ResponseEntity.ok(
-                "後端已收到附檔問題：\n" +
-                "問題：" + question + "\n" +
-                "檔名：" + image.getOriginalFilename() + "\n" +
-                "大小：" + image.getSize() + " bytes"
-        );
-    }
-}    
+    }    
 }
