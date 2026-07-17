@@ -67,8 +67,23 @@ public class PetController {
             String answer = callGeminiAssistant(question);
             boolean recommendHospital = answer.contains("[RECOMMEND_HOSPITAL]");
 
+            // 3. 擦除標籤與清理換行（改為徹底把各種換行符都轉成空格，防止斷句抓錯）
             answer = answer.replace("[RECOMMEND_HOSPITAL]", "").trim();
+            answer = answer.replace("\r\n", " ")
+                           .replace("\n", " ")
+                           .replace("\\n", " ")
+                           .trim();
 
+            // 4. === 🚀 溫和版斷句過濾器（只在尾巴真的沒講完時才切） ===
+            // 如果結尾是沒說完的連接詞、動詞、或開括號，我們才進行微幅切除
+            if (answer.endsWith("在") || answer.endsWith("的") || answer.endsWith("（") || answer.endsWith("(")) {
+                // 往回找最近的一個句號
+                int lastPeriod = answer.lastIndexOf("。");
+                if (lastPeriod > 0) {
+                    answer = answer.substring(0, lastPeriod + 1).trim();
+                }
+            }
+            // ===================================================
             Map<String,Object> result = new HashMap<>();
 
             result.put("answer", answer);
@@ -110,14 +125,25 @@ public class PetController {
         //         "不要假裝自己是獸醫，也不要做絕對診斷。\n" +
         //         "回答請控制在 3 到 6 句，適合顯示在手機聊天畫面。\n\n" +
         //         "使用者問題：" + question;
+            // String prompt =
+            //     "你是一位寵物照護助手，請用繁體中文回答。\n" +
+            //     "請根據使用者的問題，提供清楚、溫和、實用的寵物照護建議。\n" +
+            //     "如果問題可能涉及疾病、呼吸困難、中毒、持續嘔吐、抽搐、流血、精神不佳等狀況，請提醒使用者盡快帶寵物就醫，並在最後一行額外輸出：" +
+            //     "[RECOMMEND_HOSPITAL]\n" +
+            //     "除了危急的情況，不可以輸出這段文字。\n" +
+            //     "不要假裝自己是獸醫，也不要做絕對診斷。\n" +
+            //     "回答請控制在 3 到 6 句。\n\n" +
+            //     "使用者問題：" + question;
+
             String prompt =
-                "你是一位寵物照護助手，請用繁體中文回答。\n" +
-                "請根據使用者的問題，提供清楚、溫和、實用的寵物照護建議。\n" +
-                "如果問題可能涉及疾病、呼吸困難、中毒、持續嘔吐、抽搐、流血、精神不佳等狀況，請提醒使用者盡快帶寵物就醫，並在最後一行額外輸出：" +
-                "[RECOMMEND_HOSPITAL]\n" +
-                "除了危急的情況，不可以輸出這段文字。\n" +
-                "不要假裝自己是獸醫，也不要做絕對診斷。\n" +
-                "回答請控制在 3 到 6 句。\n\n" +
+                "你是一位溫和親切的台灣寵物照護助手，請一律使用繁體中文（台灣習慣用語）回答使用者。\n" +
+                "請根據使用者的問題，提供 3 到 4 句清楚、實用的寵物日常照護建議。\n\n" +
+
+                "【注意事項】\n" +
+                "1. 如果問題涉及流血、中毒、持續嘔吐、呼吸困難、嚴重搔癢或高度懷疑生病的狀況，請在回答最後加上這行標籤：[RECOMMEND_HOSPITAL]\n" +
+                "2. 你的身份是助理，若懷疑生病，請建議就醫，不要做出絕對的醫學診斷。\n" +
+                "3. 回答請一次生完，請勿夾雜任何英文思考過程或自我審查文字。\n\n" +
+
                 "使用者問題：" + question;
 
         Map<String, Object> requestBody = Map.of(
@@ -440,7 +466,6 @@ public class PetController {
         private String askExternalGemini(String question) {
 
         //String apiKey = "api"; // 建議之後改成環境變數
-
         String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" + apiKey;        
         try{
             String prompt = "你是一位專業獸醫助理，請用自然、實用、簡單易懂的方式回答使用者問題，並一律使用繁體中文(台灣用語)回答，禁止使用簡體中文：\n"
